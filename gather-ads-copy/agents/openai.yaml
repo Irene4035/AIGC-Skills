@@ -1,0 +1,4 @@
+interface:
+  display_name: "Gather Ads Copy"
+  short_description: "Collect and verify dealer specials for ad-ready copy"
+  default_prompt: "Gather top model specials from a dealer website, verify details on model pages, and output ad-copy CSV fields."
