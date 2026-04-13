@@ -1,0 +1,141 @@
+# Agent Instructions
+
+This file is for agent runners and maintainers of this workspace. It defines how work is organized so outputs are easy to review and share.
+
+## Workspace goals
+
+- Produce reviewable deliverables in `artifacts/`.
+- Keep intermediate work in `logs/`.
+- Leave `temp/` available for user-managed temporary files during active work.
+- Keep secrets out of git and out of chat transcripts.
+- Keep procedures repeatable (write down what you did, where outputs are, and what assumptions you made).
+
+## Workflow trigger
+
+- If the user says `work work`, read `WORKFLOW.md` before doing anything substantial.
+- Treat `WORKFLOW.md` as the user-maintained playbook for recurring tasks, preferences, and decision rules in this workspace.
+- Follow the workflow that best matches the request. If multiple workflows could apply, choose the closest match and say which one you used.
+- If `WORKFLOW.md` is missing, too vague, or does not cover the request, say so briefly and continue with the normal workspace rules in this file.
+
+## Tooling policy
+
+- If Node, npm, npx, Python, or uv are missing on the machine, bootstrap them globally with `mise` so Codex can use them from the sandboxed command environment.
+- Preferred global baseline:
+  - `mise use -g node@24 python@3.14 uv@latest`
+- During first-time bootstrap, prefer `mise exec` for the install commands themselves so the tools work immediately in the current shell even before shell startup files are reloaded.
+- Prefer mature, widely used CLI tools before handwritten code when they are a clear fit for the task.
+- Good examples:
+  - `ffmpeg` for video/audio conversion, extraction, and packaging
+  - `ImageMagick` for image conversion, compositing, and batch transforms
+  - `uv` for Python environments and dependency sync
+  - repo-local `npm` scripts for Node workflows
+- Prefer official or broadly trusted tools with stable docs and wide adoption.
+- Avoid obscure one-off community utilities unless the user asks for them or a technical maintainer has approved them.
+- When the repo already defines scripts or dependencies in `package.json` or `pyproject.toml`, use those repo-local entry points before inventing alternatives.
+- Prefer repo-local installs and virtual environments over global package installs. Machine-level global tools are acceptable when they are established prerequisites such as `ffmpeg` or `ImageMagick`.
+
+## Skill installation and authoring policy
+
+- Every SmartWorkers workspace must keep its authored skill source of truth under `skills/` and must also have the required Codex skill baseline available.
+- Use `npx skills ...` as the only tool for installing or updating Codex skills for this workspace.
+- Keep authored source skills in the workspace-local `skills/` tree, and use `npx skills ...` to apply them to Codex. Do not maintain a second source of truth by manually copying skill folders elsewhere.
+- Do not use `skill-installer` or manual copying for workspace skill installation.
+- Required Codex baseline: `skill-creator` and `smart-skill-maker`.
+- If the required baseline is missing, install it for Codex with `npx skills ...` before doing skill authoring work, and report the workspace as only partially set up until that is done.
+- Use `smart-skill-maker` as the only tool for creating or improving skills in this workspace.
+- Keep the local source of truth in `skills/`, following `skills/AGENTS.md`.
+- After editing a workspace skill, apply it to Codex with `npx skills add -a codex -y ./skills --skill <skill-name>`.
+- Keep skill names stable; use frontmatter `metadata.skill_version` to distinguish revisions.
+- Increment `metadata.skill_version` every time a skill is updated.
+
+## Secret and config policy
+
+- Workspace-root `workers.jsonc` is the single source of truth for API keys, secrets, and endpoints.
+- Never modify `workers.jsonc` or any other existing config file unless the user explicitly confirms that exact edit first.
+- When the goal is only to add examples, hints, or placeholders, default to append-only help. Do not delete, rewrite, normalize, reorder, or "clean up" existing config without user permission.
+- Preserve unrelated keys, comments, formatting, and credentials exactly as they are unless the user clearly approves a broader config change.
+- Never ask users to paste secrets into chat.
+- Never “work around” missing config by using env vars, hardcoding, or interactive prompts.
+- Never print or log secrets from `workers.jsonc` (it’s OK to say “`openai.apiKey` is missing”, but not the value).
+
+### Missing or invalid required config: ask first, prefer append-only help, then stop
+
+If a skill requires a config value and it’s missing or appears invalid (for example: API authentication fails), do the following:
+
+1) Tell the user the exact config path that is missing or failing, and why it blocks the task.
+
+2) Ask whether they want you to append a clearly marked placeholder or example to the existing config file.
+   Do not edit the file before the user says yes.
+
+3) If the user approves, only append the smallest clearly marked placeholder/example needed.
+   Do not delete, rewrite, rename, reorder, or reformat existing config.
+   If a safe append would still require changing existing keys or structure, do not edit the file; give the user the exact snippet and placement instructions instead.
+
+   For example, give or append a snippet like:
+
+```jsonc
+{
+  "openai": {
+    "apiKey": "[PLEASE ENTER KEY HERE]"
+  }
+}
+```
+
+4) Stop the task.
+5) Give the user non-technical, actionable next steps:
+
+   - Open the file `workers.jsonc` at the top level of the repo.
+   - Find the setting called `openai.apiKey` (or the exact key name you referenced in your error message).
+   - Replace the placeholder text with the real key value (keep the quotes; don’t add extra spaces).
+   - Save the file.
+   - Re-run the task.
+
+6) If the value is present but still fails auth, tell the user what to do next:
+
+   - Double-check they edited the correct file: workspace-root `workers.jsonc` (not `workers.example.jsonc`).
+   - Ensure the key is copied fully (no missing characters, no newline at the end).
+   - If they’re not sure the key is valid, they may need to generate a new key in the provider’s dashboard and update `workers.jsonc`.
+
+7) If the user can’t fix it (or it seems complex), guide them to seek help from a technical person and provide an “inspection bundle” they can forward:
+
+   - The exact error message (with any secrets removed).
+   - The exact command they ran.
+   - Relevant tool version output when it matters, for example `node -v`, `python --version`, or `uv --version`.
+   - The relevant config path name (for example: `openai.apiKey`) and confirmation of whether it’s present (never the value).
+
+## Skill script failures: stop and report (don’t “work around”)
+
+Once a user has specified a skill (or you have decided to use one) and you are running its scripts: if you hit failures that look like a bug, remote service/server outage, network issue, rate limit, or similar “external dependency” problem, stop and report.
+
+- Do not try to bypass the failure by writing ad-hoc one-off scripts, switching to an unrelated local implementation, or otherwise changing the agreed approach without user direction.
+- Report the exact command, the error output, and the likely category (bug vs config vs network vs upstream service), plus a clear next step for the user (retry later, check network, update `workers.jsonc`, file an issue, etc.).
+
+## Output locations
+
+- Put intermediate/working files under `logs/`.
+- Treat `temp/` as user-managed scratch space for ad-hoc files they want to keep around during the work.
+- Do not write new agent outputs into `temp/` unless the user explicitly asks for it.
+- If the user places files in `temp/`, it is OK to read or use them when relevant to the task.
+- Put final deliverables under `artifacts/`.
+- Group each task run into a dedicated subfolder under both `logs/` and `artifacts/`, and keep the run folder name identical in both places.
+  - Use this naming format (local time): `YYYYMMDD-HHMMSS-<epochMs>-<short-desc>`
+  - Example: `artifacts/subaru-brz-ads/20260301-212955-1709309395257-subaru-brz-ads/` (and the matching `logs/subaru-brz-ads/20260301-212955-1709309395257-subaru-brz-ads/`)
+- If you create one-off scripts or temporary resources for a task, put them inside that task’s `logs/<short-desc>/<run-folder>/` subfolder (not as new top-level folders in the repo root).
+- Each task subfolder in `logs/` or `artifacts/` must include a `README.md` that records progress and lists files.
+- When you complete a task (success or failure), provide a short report: result/status, delivered outputs (paths), the process you followed, and evaluation/suggestions for next steps.
+
+## Workspace skeleton (required files/folders)
+
+When setting up or polishing a workspace, ensure these key folders exist and are documented with local rules:
+
+- `logs/` (scratch, can be deleted anytime)
+  - Must contain `logs/AGENTS.md` describing usage, restrictions, and what belongs here.
+- `temp/` (user-managed temporary files)
+  - Must contain `temp/AGENTS.md` describing that it is primarily for user-kept temporary files during active work.
+- `artifacts/` (final deliverables)
+  - Must contain `artifacts/AGENTS.md` describing what counts as a deliverable, expected structure, and any restrictions.
+- `skills/` (workspace-local skill source tree)
+  - Must contain `skills/AGENTS.md` describing that this is the source of truth for locally authored skills and that `npx skills ...` is the only install/update path for skills in the workspace.
+
+If a key folder is missing, create it. If its `AGENTS.md` is missing or outdated, create/polish it.
+These per-folder `AGENTS.md` files should be tracked in git even if the rest of the folder is ignored.
